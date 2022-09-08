@@ -1,0 +1,85 @@
+#!/usr/bin/env groovy
+
+pipeline {
+  agent {
+    label "${GCP_NODE_NAME}"
+  }           
+  stages {
+    stage('Build Loader') {
+      steps {
+        script {
+          buildTagName = getBuildTagName();
+        }
+        buildLoader(buildTagName,GITHUB_CREDENTIALS_ID)
+      }
+    }
+    stage('Git Checkout') {
+      steps {
+        echo '[DEBUG] Checkout API(s)'
+        checkoutGHCode(GITHUB_SOURCE_CODE, GITHUB_BRANCH, buildTagName, GITHUB_CREDENTIALS_ID)
+        }
+      }
+      
+      stage('Deploy Terraform') {
+        steps {
+          echo '[DEBUG] Deploy'
+          deployTerraform(ENVIRONMENT, buildTagName)
+        }
+      }
+    }
+}
+
+def buildLoader(buildTagName,credentialsId) {
+  echo "[DEBUG] buildLoader called with: loaderFolder=${buildTagName}"
+}
+
+def checkoutGHCode(repository, branch, buildTagName, credentialsId) {
+  echo "[DEBUG] checkout called with: repository=${repository}, branch=${branch}, folder=${buildTagName}, credentialsId=${credentialsId}"
+  try {
+    checkout(poll: false, scm: [$class: 'GitSCM', branches: [[name: branch]], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: buildTagName]], gitTool: env.gitClient, submoduleCfg: [], userRemoteConfigs: [[credentialsId:credentialsId, url: repository]]])
+  }catch(ex) {
+    echo "[ERROR] Unable to checkout repository due to: ${ex}"
+    cleanUp(buildTagName)
+    throw ex
+  }
+}
+
+def deployTerraform(enviroment,buildTagName) {
+    echo "[DEBUG] deployTerraform called with: enviroment=${enviroment}, buildTagName=${buildTagName}"
+  
+    dir(buildTagName + '/' + SOURCE_PATH) {
+      ansiColor('xterm') {
+        applyCommand = ""
+        if(params.APPLY){
+          applyCommand="; terraform apply -lock=false tfplan"
+        }
+        destroyParam = ""
+        if(params.DESTROY){
+          destroyParam="-destroy"
+        }
+        if(params.PLAN) {
+          sh "set +x;source ~/.bash_profile; set -x; terraform init -input=false -get-plugins=false ${TERRAFORM_INIT_PARAMS}; terraform plan ${destroyParam} -out tfplan ${TERRAFORM_PLAN_PARAMETERS} ${applyCommand}"
+        }else{
+          echo "Nothing to do"
+          echo "Terraform version: "
+          sh "set +x;source ~/.bash_profile; set -x; terraform -version"
+        }
+        }
+    }
+}
+
+def cleanUp(buildTagName) {
+    echo "[INFO] tidying up the ${buildTagName} directory"
+        try {
+            dir(buildTagName) {
+                deleteDir()
+            }
+        }
+       catch(ex) {
+               echo "[WARNING] Caught the following error attempting to clean up: ${ex}"
+       }
+}
+
+def getBuildTagName() {
+    return env.JOB_NAME.replaceAll('/', '_').replaceAll(' ', '_') + '_' + env.BUILD_ID;
+}

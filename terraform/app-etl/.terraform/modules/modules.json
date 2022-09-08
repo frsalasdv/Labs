@@ -1,0 +1,1 @@
+{"Modules":[{"Key":"compute-instance.instance_label","Source":"../gce-labels","Dir":"../modules/compute/gce-labels"},{"Key":"","Source":"","Dir":"."},{"Key":"compute-instance","Source":"../modules/compute/gce","Dir":"../modules/compute/gce"}]}
