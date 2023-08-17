@@ -34,7 +34,6 @@ if __name__ == "__main__":
     state  = read_file(file_name=STATE_FILE_NAME)
     commit = read_file(file_name=COMMIT_FILE_NAME)
     config = read_file(file_name=CONFIG_FILE_NAME)
-asdasd
 
     if config.get('hotfix') and (commit.get('commit') != state.get('last_commit')):
         sys.stdout = open("hotfix_" + config.get('Change_Request') + ".log", 'a')
